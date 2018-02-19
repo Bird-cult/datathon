@@ -1,9 +1,9 @@
-#Things to ask
+# Things to ask
 
 
 ## Credit Dataset
 
-Take a look.
+Take a look, that's what we are using.
 
 ## Cycling Dataset (out of interest, since we are doing the other dataset):
 
