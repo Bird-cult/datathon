@@ -1,9 +1,5 @@
-library(lubridate)
 library(dplyr)
 library(readxl)
-
-#cycling <- read.csv("~/datathon/Cycling/cycling.csv", sep=";")
-#unique(cycling$qid) # 11 bikers
 
 credit <- read_excel("~/datathon/Credit/Credit_DataSet.xlsx", sheet=2,
                      col_types=c("skip", "text", "text",
@@ -16,10 +12,5 @@ credit <- read_excel("~/datathon/Credit/Credit_DataSet.xlsx", sheet=2,
                                  "numeric", "numeric", "numeric",
                                  "numeric", "numeric", "numeric",
                                  "numeric", "numeric", "numeric",
-                                 "numeric", "numeric"))
-
-# Convert selected columns to factors. 
-
-
-
-
+                                 "numeric", "numeric")) %>%
+      mutate_if(is.character, as.factor) # Convert all character columns to factor
