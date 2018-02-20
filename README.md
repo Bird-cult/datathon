@@ -15,6 +15,10 @@ SEM, from the literature or something
 ## Exteral data
 - deanonymize the dataset, find company
 
+## Some sort of NLP
+scrape twitter per country for that date,
+e.g. see how big companies are perceived against small? Hard to do without external data (names of companies) at the very least
+
 ## Visualization:
 find something to visualize
 
