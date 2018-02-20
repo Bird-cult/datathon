@@ -6,6 +6,9 @@ logistic regression, MLP, random forest etc
 ## cluster analysis
 very nice here
 
+## test models on these data
+SEM, from the literature or something
+
 ## Missingness: Tonto
 -> we can use this together with a bayesian model for missing data
 
