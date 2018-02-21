@@ -6,8 +6,8 @@ library(dplyr)
 companies <- read.csv("~/datathon/extra_data/companies.csv")
 
 # Read the companies' identifier
-tickers <- companies$TICKER[21:(length(tickers))]
-tickers_test <- tickers[1:3]
+tickers <- companies$TICKER
+tickers <- tickers[21:(length(tickers))]
 
 #https://api.intrinio.com/historical_data.csv?identifier=AAPL&item=marketcap
 get_url <- function(identifier) {
@@ -63,9 +63,9 @@ get_from_web <- function() {
   market_cap_chosen_date <- lapply(tickers, try_get_historical)
 
   df <- data.frame(tickers=tickers, market_cap=unlist(market_cap_chosen_date)) %>% drop_na
-  write.csv(df, file="extra_data/market_cap_names.csv")
+  write.csv(df, file="extra_data/market_cap_names.csv2")
 }
 
 get_from_disk <- function() {
-  read.csv("extra_data/market_cap_names.csv")
+  read.csv("extra_data/market_cap_names.csv") %>% mutate(MARKETCAP=market_cap) %>% dplyr::select(tickers, MARKETCAP)
 }
