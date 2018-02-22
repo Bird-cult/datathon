@@ -5,6 +5,8 @@ library(ggplot2)
 library("quantmod")
 library("reshape2") 
 library(tidyr)
+library(DMwR)
+
 
 credit <- read_excel("./Credit/Credit_DataSet.xlsx", sheet=2,
                      col_types=c("skip", "text", "text",
@@ -148,8 +150,10 @@ X$WHISTLE_BLOWER_POLICY <- as.integer(X$WHISTLE_BLOWER_POLICY) %>% map( function
 X$ETHICS_POLICY <- as.integer(X$ETHICS_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
 X$BRIBERY_POLICY <- as.integer(X$BRIBERY_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
 
-# TODO: IMPUTE INSTEAD OF DROPPING
-X <- X %>% drop_na
+# Impute the data we will not use in EM
+X <- knnImputation(X, k = 10, scale = T, meth = "weighAvg",distData = NULL)
+
+X <- X %>% drop_na # Should drop nothing
 
 Y <- X %>% dplyr::select(DEFAULT_PROB)
 X <- X %>% dplyr::select(-DEFAULT_PROB) %>% mutate_each(funs(scale),
@@ -160,3 +164,4 @@ X <- X %>% dplyr::select(-DEFAULT_PROB) %>% mutate_each(funs(scale),
 
 write.csv(X, file="some_X.csv")
 write.csv(Y, file="some_Y.csv")
+
