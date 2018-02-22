@@ -132,3 +132,7 @@ fxMerged[,22:30] = fxMerged[,22:30] * fxMerged$conversionFactor
 fxMerged<-fxMerged[,c(2,3,4,1,5:30)]
 
 credit<-fxMerged
+
+#make a ndarry for python
+#colMeans(is.na(credit))
+write_feather(as.data.frame(credit), './df.feather')
