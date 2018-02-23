@@ -2,7 +2,6 @@
 rm(list = ls())
 library(forcats)
 library(FNN) # used
-library(tidyverse) # used
 library(varhandle) # used
 library(rlang)
 library(Rtsne)
@@ -27,6 +26,9 @@ library(mice) # used
 library(Boruta) # used
 library(smotefamily) # used
 library(readxl)
+library(tidyverse) # used
+environment(arrange)
+
 
 # Function that identifies if the variable can be used as factor
 is.whole = function(x){
@@ -199,9 +201,6 @@ glimpse(df)
 
 # index
 set.seed(123); index = sample(1:nrow(df), size = floor(nrow(df)*0.70))
-df_tr = df[index,]
-df_ts = df[-index,]
-
 
 # training sets
 df_tr = df[index,]
@@ -217,27 +216,30 @@ missingness = aggr(df_tr, col=c('navyblue','yellow'),
                    labels=names(df_tr), cex.axis=.7,
                    gap=3, ylab=c("Missing data","Pattern"))
 
-
+# Multiple Imputation with RF
 init = mice(df, meth = "rf", ntree = 10)
 plot(init)
 densityplot(init)
 df2 = complete(init)
 
+table(df2$ETHICS_POLICY); table(df$ETHICS_POLICY)
+table(df2$BRIBERY_POLICY)
+table(df2$WHISTLE_BLOWER_POLICY)
 
+# Training set with imputation
 df_tr2 = df2[index,]
+nrow(df2[index,])
 
 # It seems that Market Cap (Equity) + Liabilities ~ Assets (Accounting Equation)
-#   So it seems that there's multicollinearity, maybe PCA can 
+#   So it seems that there's multicollinearity, maybe PCA can help
 df_tr2 %>% dplyr::select_if(is.numeric) %>% cor(use='complete.obs') %>% corrplot::corrplot()
 
-
-glimpse(df_tr2[names(dplyr::select_if(df_tr2[,-c(1:2)], is.factor))])
-# Checking if the 
+# Checking if there are redundant variables with only one factor
 sapply(df_tr2[names(dplyr::select_if(df_tr2[,-c(1:2)], is.factor))],levels)
-
 glimpse(df_tr2)
-tsne_df = df_tr2 %>% dplyr::select(-ID) %>% dplyr::select_if(is.numeric) %>% scale() %>% as_data_frame()
-tsne_df = tsne_df[complete.cases(tsne_df),]
+
+# t-SNE: Need to take only numeric data
+tsne_df = df_tr2 %>% select_if(is.numeric) %>% scale() %>% as_data_frame()
 
 set.seed(123); tsne = Rtsne(tsne_df,dims = 2, 
                             perplexity = 30, verbose = TRUE,
@@ -247,6 +249,11 @@ set.seed(123); tsne_3D = Rtsne(tsne_df,dims = 3,
                                check_duplicates = F, max_iter = 5000)
 
 tsne_3D_tr = as_data_frame(tsne_3D$Y)
+tsne_2D_tr = as_data_frame(tsne$Y)
+
+df_tr2 %>% dplyr::select_if(is.numeric) %>% bind_cols(tsne_3D_tr) %>% 
+            cor(use='complete.obs') %>% corrplot::corrplot()
+
 # Plots t-SNE 2D
 ggplot(bind_cols(CHURN=scl_tr$CHURN,tsne2_scl_tr), aes(x=V1, y=V2)) +
   geom_point(size=1, aes(col = CHURN)) +
@@ -264,10 +271,75 @@ plot_ly(data.table(tsne_3D_tr), x = ~V1, y = ~V2, z = ~V3,
 
 rm(tsne_df)
 #### POST-EDA PREPROCESSING ####
+df_tr2 = df_tr2 %>% dplyr::select(DEFAULT_PROB, everything())
+
+scl_tr_center = attributes(scale(df_tr2[,-1] %>% select_if(is.numeric)))[['scaled:center']] 
+scl_tr_scale = attributes(scale(df_tr2[,-1] %>% select_if(is.numeric)))[['scaled:scale']]
+
+df_tr2 = df_tr2[,-1] %>% select_if(is.numeric) %>% scale() %>% 
+         cbind(DEFAULT_PROB=df_tr2$DEFAULT_PROB, select_if(df_tr2,is.factor)) %>%
+          as_data_frame() # Create new dataframe for scaling
+
+#### CLUSTER ANALYSIS ####
+
+# Decide the number of clusters
+df_tr2_num = df_tr2 %>% select_if(is.numeric) %>% as.matrix()
+set.seed(123); clest = Clest(df_tr2_num, maxK = 3, alpha = 0.1, B = 15, B0 = 5, nstart = 1000)
+
+# Calculate the Regularization Parameter
+set.seed(123); kperm = KMeansSparseCluster.permute(df_tr2_num, K=3, nperms = 5) # Tuning Par. 1.570276
+set.seed(123); kperm_4 = KMeansSparseCluster.permute(df_tr2_num, K=4, nperms = 5)
+
+# Cluster
+set.seed(123); rskm = RSKC(d = df_tr2_num, ncl = 3, alpha = 0.1, L1 = kperm$bestw)
+set.seed(123); rskm_4 = RSKC(d = df_tr2_num, ncl = 4, alpha = 0.1, L1 = kperm$bestw)
+
+# Visualization of Clusters
+fviz_cluster(list(data = df_tr2_num, cluster = rskm$labels),
+             stand = FALSE, geom = "point",frame.type = "norm")
+
+fviz_cluster(list(data = df_tr2_num, cluster = rskm_4$labels),
+             stand = FALSE, geom = "point",frame.type = "norm")
+
+
+# Important Variables for Clustering
+cluster_vars = data.frame('Variables' = unlist(attributes(rskm$weights)),'Weights' = rskm$weights) %>% 
+              arrange(desc(Weights)) %>% filter(Weights > 0.01)
+
+# transactions
+cl_interprete = df_tr2 %>% dplyr::select(as.character(cluster_vars$Variables))
+cl_interprete_all = df_tr2
+cl_interprete_all$cluster = as.factor(rskm$labels)
+cl_interprete$cluster = as.factor(rskm$labels)
+cl_interprete = dplyr::select(cl_interprete, cluster, everything())
+
+profile = apply(cl_interprete[,-1], 2, function(x) tapply(x, cl_interprete$cluster, median_mode))
+
+
 #### FEATURE SELECTION ####
 set.seed(123); bor = Boruta(DEFAULT_PROB~., data = df_tr2, doTrace = 2)
 plot(bor,cex.axis=.6, las=2, xlab="", main="Variable Importance")
 featlist = attStats(bor) %>% rownames_to_column(var = 'Features') %>% 
             dplyr::select(Features, medianImp) %>% mutate(rank = rank(-medianImp)) %>% arrange(rank)
+
+df_tr2_bor = df_tr2 %>% dplyr::select(DEFAULT_PROB, featlist$Features[c(1:10)])
+
+
+#### MODEL BUILDING ####
+train_control = trainControl(method="cv",number=10,savePredictions=TRUE)
+
+train(DEFAULT_PROB ~ ., data = df_tr2, method = "glm", family="binomial",
+      trControl=train_control,metric='RMSE')
+
+glm(DEFAULT_PROB ~ VOLATILITY_180D, data = df_tr2_bor, family = binomial(link="logit"))
+                                                                                                             
+glm(DEFAULT_PROB ~ VOLATILITY_180D, data = df_tr2_bor, family = binomial(link="logit"))
+
+set.seed(123); rf = train(DEFAULT_PROB ~ ., data = df_tr2_bor, method='ranger',
+                          trControl=train_control, tuneGrid = expand.grid(mtry=c(2:5),
+                          min.node.size = 5, splitrule = 'variance'), metric = 'RMSE')
+
+glm(DEFAULT_PROB ~ credit$VOLATILITY_180D., data=credit_smaller_non_na, na.action = na.omit)
+summary(glm_fit)
 
 
