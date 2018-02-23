@@ -150,6 +150,9 @@ X$WHISTLE_BLOWER_POLICY <- as.integer(X$WHISTLE_BLOWER_POLICY) %>% map( function
 X$ETHICS_POLICY <- as.integer(X$ETHICS_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
 X$BRIBERY_POLICY <- as.integer(X$BRIBERY_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
 
+credit$PCT_WOMEN_EMPLOYEES <- credit$PCT_WOMEN_EMPLOYEES / 100 %>% map( function(x) {if(is.na(x)){-1}else{x}})
+credit$PCT_WOMEN_MGT <- credit$PCT_WOMEN_MGT / 100 %>% map( function(x) {if(is.na(x)){ -1 }else{x}})
+
 # Impute the data we will not use in EM
 X <- knnImputation(X, k = 10, scale = T, meth = "weighAvg",distData = NULL)
 
