@@ -1,10 +1,12 @@
 library(dplyr)
 library(readxl)
-library(MCMCpack)
+require(MCMCpack) # This overwrites select
 library(ggplot2)
 library("quantmod")
 library("reshape2") 
-#TODO: ONE OF THESE PACKAGES OVERWRITES DPLYR::SELECT DANIEL?
+library(tidyr)
+library(DMwR)
+
 
 credit <- read_excel("./Credit/Credit_DataSet.xlsx", sheet=2,
                      col_types=c("skip", "text", "text",
@@ -22,7 +24,7 @@ credit <- read_excel("./Credit/Credit_DataSet.xlsx", sheet=2,
   mutate(DEFAULT_PROB = DEFAULT_PROB / 100)
 
 # print NA percentage per column
-credit %>% summarize_all(function(x) sum(is.na(x))/length(x)) %>% select_if(function(x) x>.001)
+credit %>% summarize_all(function(x) sum(is.na(x))/length(x)) %>% select_if(function(x) x>.00)
 
 # drop na, and columns with sufficiently many NAs
 credit_smaller_non_na <- credit %>% dplyr::select(-c(CURRENCY,PCT_WOMEN_EMPLOYEES, PCT_WOMEN_MGT, WHISTLE_BLOWER_POLICY, ETHICS_POLICY, BRIBERY_POLICY)) %>% drop_na
@@ -31,8 +33,7 @@ glm_fit <- glm(DEFAULT_PROB ~ ., data=credit_smaller_non_na, na.action = na.omit
 summary(glm_fit)
 
 # Don't fit on INDUSTRY GROUP and INDUSTRY, as multicolinearity perhaps?
-glm_bayesian_fit <- MCMCregress(DEFAULT_PROB ~ . -INDUSTRY_GROUP -INDUSTRY, data=credit_smaller_non_na, na.action = na.omit)
-
+glm_bayesian_fit <- MCMCpack::MCMCregress(DEFAULT_PROB ~ . -INDUSTRY_GROUP -INDUSTRY, data=credit_smaller_non_na, na.action = na.omit)
 
 
 ############# Normalize country currency ###################
@@ -133,6 +134,46 @@ fxMerged<-fxMerged[,c(2,3,4,1,5:30)]
 
 credit<-fxMerged
 
+###################################################################################################
 #make a ndarry for python
+#####################################################################################################
+
 #colMeans(is.na(credit))
 write_feather(as.data.frame(credit), './df.feather')
+
+###################################################################################################
+##### EXPORT FOR NN AND EM
+#####################################################################################################
+X <- credit %>% dplyr::select(DEFAULT_PROB, NBR_EMPLOYEES, EMPL_GROWTH,
+                       COUNTRY_RISK_GROWTH_RATE, COUNTRY_RISK_DIVIDEND_YIELD, COUNTRY_RISK_PAYOUT_RATIO,
+                       VOLATILITY_30D, VOLATILITY_180D, PCT_CHG_1_YEAR, PCT_CHG_6_M, DIVIDEND_YIELD,
+                       MARKETCAP, TOTAL_ASSETS, TOTAL_LIABILITIES, CURRENT_ASSETS, EBIT, RETAINED_EARNINGS,
+                       SALES, SALES_GROWTH, INTEREST_EXPENSES,
+                       WHISTLE_BLOWER_POLICY, ETHICS_POLICY, BRIBERY_POLICY,
+                       PCT_WOMEN_EMPLOYEES, PCT_WOMEN_MGT)
+
+# Assign defaults to the policy columns as we will use EM to find them
+X$WHISTLE_BLOWER_POLICY <- as.integer(X$WHISTLE_BLOWER_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
+X$ETHICS_POLICY <- as.integer(X$ETHICS_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
+X$BRIBERY_POLICY <- as.integer(X$BRIBERY_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
+
+X$PCT_WOMEN_EMPLOYEES <- (X$PCT_WOMEN_EMPLOYEES / 100) %>% map( function(x) {if(is.na(x)){-1}else{x}}) %>% as.numeric
+X$PCT_WOMEN_MGT <- (X$PCT_WOMEN_MGT / 100) %>% map( function(x) {if(is.na(x)){ -1 }else{x}}) %>% as.numeric
+
+# Impute the data we will not use in EM
+X <- knnImputation(X, k = 10, scale = T, meth = "weighAvg",distData = NULL)
+
+X <- X %>% drop_na # Should drop nothing
+
+Y <- X %>% dplyr::select(DEFAULT_PROB)
+X <- X %>% dplyr::select(-DEFAULT_PROB) %>% mutate_each(funs(scale),
+                                                        -WHISTLE_BLOWER_POLICY,
+                                                        -ETHICS_POLICY,
+                                                        -BRIBERY_POLICY,
+                                                        -PCT_WOMEN_EMPLOYEES,
+                                                        -PCT_WOMEN_MGT)
+
+
+write.csv(X, file="some_X.csv")
+write.csv(Y, file="some_Y.csv")
+
