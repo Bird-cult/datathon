@@ -149,15 +149,16 @@ X <- credit %>% dplyr::select(DEFAULT_PROB, NBR_EMPLOYEES, EMPL_GROWTH,
                        VOLATILITY_30D, VOLATILITY_180D, PCT_CHG_1_YEAR, PCT_CHG_6_M, DIVIDEND_YIELD,
                        MARKETCAP, TOTAL_ASSETS, TOTAL_LIABILITIES, CURRENT_ASSETS, EBIT, RETAINED_EARNINGS,
                        SALES, SALES_GROWTH, INTEREST_EXPENSES,
-                       WHISTLE_BLOWER_POLICY, ETHICS_POLICY, BRIBERY_POLICY)
+                       WHISTLE_BLOWER_POLICY, ETHICS_POLICY, BRIBERY_POLICY,
+                       PCT_WOMEN_EMPLOYEES, PCT_WOMEN_MGT)
 
 # Assign defaults to the policy columns as we will use EM to find them
 X$WHISTLE_BLOWER_POLICY <- as.integer(X$WHISTLE_BLOWER_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
 X$ETHICS_POLICY <- as.integer(X$ETHICS_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
 X$BRIBERY_POLICY <- as.integer(X$BRIBERY_POLICY) %>% map( function(x) {if(is.na(x)){-1}else{x - 1}}) %>% as.integer
 
-credit$PCT_WOMEN_EMPLOYEES <- credit$PCT_WOMEN_EMPLOYEES / 100 %>% map( function(x) {if(is.na(x)){-1}else{x}})
-credit$PCT_WOMEN_MGT <- credit$PCT_WOMEN_MGT / 100 %>% map( function(x) {if(is.na(x)){ -1 }else{x}})
+X$PCT_WOMEN_EMPLOYEES <- (X$PCT_WOMEN_EMPLOYEES / 100) %>% map( function(x) {if(is.na(x)){-1}else{x}}) %>% as.numeric
+X$PCT_WOMEN_MGT <- (X$PCT_WOMEN_MGT / 100) %>% map( function(x) {if(is.na(x)){ -1 }else{x}}) %>% as.numeric
 
 # Impute the data we will not use in EM
 X <- knnImputation(X, k = 10, scale = T, meth = "weighAvg",distData = NULL)
@@ -168,7 +169,9 @@ Y <- X %>% dplyr::select(DEFAULT_PROB)
 X <- X %>% dplyr::select(-DEFAULT_PROB) %>% mutate_each(funs(scale),
                                                         -WHISTLE_BLOWER_POLICY,
                                                         -ETHICS_POLICY,
-                                                        -BRIBERY_POLICY)
+                                                        -BRIBERY_POLICY,
+                                                        -PCT_WOMEN_EMPLOYEES,
+                                                        -PCT_WOMEN_MGT)
 
 
 write.csv(X, file="some_X.csv")
