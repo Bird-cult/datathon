@@ -6,7 +6,7 @@ library("quantmod")
 library("reshape2") 
 library(tidyr)
 library(DMwR)
-
+library(feather)
 
 credit <- read_excel("./Credit/Credit_DataSet.xlsx", sheet=2,
                      col_types=c("skip", "text", "text",
@@ -139,7 +139,8 @@ credit<-fxMerged
 #####################################################################################################
 
 #colMeans(is.na(credit))
-write_feather(as.data.frame(credit), './df.feather')
+MyData <- read.csv(file="./EM_data.csv", header=TRUE, sep=",")
+write_feather(as.data.frame(MyData), './EMfeather')
 
 ###################################################################################################
 ##### EXPORT FOR NN AND EM
