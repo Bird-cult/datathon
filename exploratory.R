@@ -130,9 +130,10 @@ fxMerged[,22:30] = fxMerged[,22:30] * fxMerged$conversionFactor
 #fxMerged[,33:41] = fxMerged[,22:30] * fxMerged$conversionFactor
 
 #Reshape as the original 
-fxMerged<-fxMerged[,c(2,3,4,1,5:30)]
+credit<-fxMerged[,c(2,3,4,1,5:30)]
 
-credit<-fxMerged
+#Delete unreasonable observations
+credit[3932,]$EMPL_GROWTH<-NA
 
 ###################################################################################################
 #make a ndarry for python
