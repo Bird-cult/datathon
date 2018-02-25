@@ -67,14 +67,6 @@ multi.fun  =  function(x) {
   )      
 }
 
-# Ridit Function
-ridit_scores=function(y){
-  x = vector('numeric') # creating an vector type numeric
-  for (i in 1:length(y)) {
-    x[i]=(sum(y[1:i])-sum(y[length(y):(i)]))
-  } # Uses the formula according to Baesens et al. Check the notes for further details
-  return(x)
-}
 # Mode Function
 Mode = function(x, na.rm = FALSE) {
   if(na.rm){
@@ -97,50 +89,10 @@ median_mode = function(x){
   ifelse(is.numeric(x),median(x),Mode2(x))
 }
 
-# Density GG Function - Creating a GGplot object for density graph
-density_gg = function (df,a){
-  enq_col_a = enquo(a)
-  vector_a = unlist(dplyr::select(df,UQ(enq_col_a)))
-  ggplot(df,aes(x = vector_a)) + geom_density(alpha = 0.3) +
-    labs(x = deparse(substitute(a)))   
-}
-
-#Stack Bar Chart Create a GGplot object for density graph
-stacked_gg = function (df,a){
-  enq_col_a = enquo(a)
-  vector_a = unlist(dply::dplyr::select(df,UQ(enq_col_a)))
-  ggplot(df, aes(x = vector_a)) + geom_bar(position = "fill") + 
-    theme(axis.text.x = element_text(angle = 90)) +
-    labs(x 
-         = deparse(substitute(a)))   
-}
-# Ridit_Modifier needs that SAR levels includes 'SAR' and Ridits Score function already in WS
-Ridit_Modifier = function(df,x){
-  name_df = deparse(substitute(df)) # takes the df into proper format
-  enq_col = enquo(x) # takes the col into proper format
-  vector_x = unlist(dply::dplyr::select(df,UQ(enq_col))) # Vectorize the column x from df dataframe
-  vector_y = unlist(dplyr::select(df,SAR)) # Vectorize the column SAR from df dataframe
-  table_xy = table(vector_y,vector_x) # Make a table out of two previous vectors
-  prop_table = prop.table(table_xy,2) %>% data.frame() %>% filter(!is.nan(Freq),vector_y == 'SAR')  %>% 
-    arrange(desc(Freq))
-  # Make a table with Relative Frequency of SAR that filters only the case when SAR is TRUE and orders decreasingly
-  colnames(prop_table) = c("Var1", deparse(substitute(x)), "Freq_SAR")  
-  table_freqx = table(vector_x) %>% prop.table() %>% data.frame() # Make a table with Relative Frequency of each category
-  colnames(table_freqx) = c(deparse(substitute(x)), 'Freq') 
-  join = left_join(prop_table,table_freqx, by = deparse(substitute(x))) # Adding to prop_table the Rel.Freq. of table_freqx
-  ridit = ridit_scores(join$Freq) %>% data.frame() # Use basic function of Ridit Scoring
-  colnames(ridit) = 'Ridit_Scores'
-  ridit = data.frame(join,ridit) %>% dplyr::select(UQ(enq_col),'Ridit_Scores')
-  colnames(ridit)=c(deparse(substitute(x)),paste0('RS_',deparse(substitute(x))))
-  df2 = left_join(df,ridit,by = deparse(substitute(x)))
-  df2 = dplyr::select(df2,-c(UQ(enq_col))) # remove original
-  assign(name_df, df2, .GlobalEnv) # Updating the Dataframe
-  assign(paste0('Ridit_Table_',deparse(substitute(df)),deparse(substitute(x))), ridit, .GlobalEnv) #Create a Ridit Table - for each category , a Ridit Table
-}
-
 # Load data properly
-setwd("C:/Users/orteg/Documents/GitHub/datathon")
-df = read_excel("credit.xlsx",na=c(""," ",".","NA","#N/A",'#N/A N/A')) # so that it interprets blank spaces as NA's
+setwd("C:/Users/orteg/Documents/GitHub/datathon/Credit")
+df = read_excel("Credit_DataSet.xlsx", sheet = 2,
+                na=c(""," ",".","NA","#N/A",'#N/A N/A')) # so that it interprets blank spaces as NA's
 
 #### DATA CLEANING ####
 
@@ -191,6 +143,35 @@ df$CURRENCY = as.factor(df$CURRENCY)
 #Change strange names to euros
 df$CURRENCY[df$CURRENCY %in% c('EDM','EES','EIL','EFR','EIP','EFM','EDG','EPE','EAS','EBF','EGD','EUR')] = 'EUR'
 
+df.stand = df
+df.stand$MARKETCAP = df.stand$MARKETCAP/1000000
+df.stand[,c(22,24:30)] = df.stand[,c(22,24:30)]/df.stand$TOTAL_ASSETS
+df.stand$TOTAL_ASSETS = NULL
+df = df.stand
+rm(df.stand)
+
+
+# Missing Values
+df$PCT_WOMEN_EMPLOYEES = NULL
+df$PCT_WOMEN_MGT = NULL
+df$ETHICS_POLICY[is.na(df$ETHICS_POLICY)] = 'N'
+df$WHISTLE_BLOWER_POLICY[is.na(df$WHISTLE_BLOWER_POLICY)] = 'N'
+df$BRIBERY_POLICY[is.na(df$BRIBERY_POLICY)] = 'N'
+
+
+# Missing Plot on DF [Warning: Data Leaking]
+missingness = aggr(df, col=c('navyblue','yellow'),
+                   numbers=TRUE, sortVars=TRUE,
+                   labels=names(df_tr), cex.axis=.7,
+                   gap=3, ylab=c("Missing data","Pattern"))
+
+# Missing Values
+df$EMPL_GROWTH[is.na(df$EMPL_GROWTH)] = median(df$EMPL_GROWTH,na.rm = TRUE)
+df$PCT_CHG_1_YEAR[is.na(df$PCT_CHG_1_YEAR)] = median(df$PCT_CHG_1_YEAR,na.rm = TRUE)
+df$VOLATILITY_180D[is.na(df$VOLATILITY_180D)] = median(df$VOLATILITY_180D,na.rm = TRUE)
+df$PCT_CHG_6_M[is.na(df$PCT_CHG_6_M)] = median(df$PCT_CHG_6_M,na.rm = TRUE)
+
+
 #### DATA WRANGLING ####
 
 ## DATA TRANSFORMATION: Making seemingly numeric variables as such, others can be factors
@@ -207,39 +188,22 @@ df_tr = df[index,]
 df_ts = df[-index,]
 
 #### EDA ####
+
+# Employment Growth Outliers
 multi.fun(df$EMPL_GROWTH[complete.cases(df$EMPL_GROWTH)])
 boxplot2(df$EMPL_GROWTH)
 
-# Missing Plot on DF [Warning: Data Leaking]
-missingness = aggr(df_tr, col=c('navyblue','yellow'),
-                   numbers=TRUE, sortVars=TRUE,
-                   labels=names(df_tr), cex.axis=.7,
-                   gap=3, ylab=c("Missing data","Pattern"))
-
-# Multiple Imputation with RF
-init = mice(df, meth = "rf", ntree = 10)
-plot(init)
-densityplot(init)
-df2 = complete(init)
-
-table(df2$ETHICS_POLICY); table(df$ETHICS_POLICY)
-table(df2$BRIBERY_POLICY)
-table(df2$WHISTLE_BLOWER_POLICY)
-
-# Training set with imputation
-df_tr2 = df2[index,]
-nrow(df2[index,])
 
 # It seems that Market Cap (Equity) + Liabilities ~ Assets (Accounting Equation)
 #   So it seems that there's multicollinearity, maybe PCA can help
-df_tr2 %>% dplyr::select_if(is.numeric) %>% cor(use='complete.obs') %>% corrplot::corrplot()
+df_tr %>% dplyr::select_if(is.numeric) %>% cor(use='complete.obs') %>% corrplot::corrplot()
 
 # Checking if there are redundant variables with only one factor
-sapply(df_tr2[names(dplyr::select_if(df_tr2[,-c(1:2)], is.factor))],levels)
-glimpse(df_tr2)
+sapply(df_tr[names(dplyr::select_if(df_tr[,-c(1:2)], is.factor))],levels)
+glimpse(df_tr)
 
 # t-SNE: Need to take only numeric data
-tsne_df = df_tr2 %>% select_if(is.numeric) %>% scale() %>% as_data_frame()
+tsne_df = df_tr %>% select_if(is.numeric) %>% scale() %>% as_data_frame()
 
 set.seed(123); tsne = Rtsne(tsne_df,dims = 2, 
                             perplexity = 30, verbose = TRUE,
@@ -251,12 +215,15 @@ set.seed(123); tsne_3D = Rtsne(tsne_df,dims = 3,
 tsne_3D_tr = as_data_frame(tsne_3D$Y)
 tsne_2D_tr = as_data_frame(tsne$Y)
 
-df_tr2 %>% dplyr::select_if(is.numeric) %>% bind_cols(tsne_3D_tr) %>% 
+df_tr %>% dplyr::select_if(is.numeric) %>% bind_cols(tsne_3D_tr) %>% 
             cor(use='complete.obs') %>% corrplot::corrplot()
 
+df_tr %>% dplyr::select_if(is.numeric) %>% bind_cols(tsne_2D_tr) %>% 
+  cor(use='complete.obs') %>% corrplot::corrplot()
+
 # Plots t-SNE 2D
-ggplot(bind_cols(CHURN=scl_tr$CHURN,tsne2_scl_tr), aes(x=V1, y=V2)) +
-  geom_point(size=1, aes(col = CHURN)) +
+ggplot(bind_cols(PROB=df_tr$DEFAULT_PROB,tsne_2D_tr), aes(x=V1, y=V2)) +
+  geom_point(size=1, aes(col = PROB)) +
   xlab("") + ylab("") +
   ggtitle("Graph 4: t-SNE") + 
   theme(plot.title = element_text(hjust = 0.5))
@@ -271,75 +238,117 @@ plot_ly(data.table(tsne_3D_tr), x = ~V1, y = ~V2, z = ~V3,
 
 rm(tsne_df)
 #### POST-EDA PREPROCESSING ####
-df_tr2 = df_tr2 %>% dplyr::select(DEFAULT_PROB, everything())
+df_tr = df_tr %>% dplyr::select(DEFAULT_PROB, everything())
 
-scl_tr_center = attributes(scale(df_tr2[,-1] %>% select_if(is.numeric)))[['scaled:center']] 
-scl_tr_scale = attributes(scale(df_tr2[,-1] %>% select_if(is.numeric)))[['scaled:scale']]
+scl_tr_center = attributes(scale(df_tr[,-1] %>% select_if(is.numeric)))[['scaled:center']] 
+scl_tr_scale = attributes(scale(df_tr[,-1] %>% select_if(is.numeric)))[['scaled:scale']]
 
-df_tr2 = df_tr2[,-1] %>% select_if(is.numeric) %>% scale() %>% 
-         cbind(DEFAULT_PROB=df_tr2$DEFAULT_PROB, select_if(df_tr2,is.factor)) %>%
+df_tr = df_tr[,-1] %>% select_if(is.numeric) %>% scale() %>% 
+         cbind(DEFAULT_PROB=df_tr$DEFAULT_PROB, select_if(df_tr,is.factor)) %>%
           as_data_frame() # Create new dataframe for scaling
 
 #### CLUSTER ANALYSIS ####
 
 # Decide the number of clusters
-df_tr2_num = df_tr2 %>% select_if(is.numeric) %>% as.matrix()
-set.seed(123); clest = Clest(df_tr2_num, maxK = 3, alpha = 0.1, B = 15, B0 = 5, nstart = 1000)
+df_tr_num = df_tr %>% select_if(is.numeric) %>% as.matrix()
+# set.seed(123); clest = Clest(df_tr_num, maxK = 3, alpha = 0.1, B = 15, B0 = 5, nstart = 1000)
 
 # Calculate the Regularization Parameter
-set.seed(123); kperm = KMeansSparseCluster.permute(df_tr2_num, K=3, nperms = 5) # Tuning Par. 1.570276
-set.seed(123); kperm_4 = KMeansSparseCluster.permute(df_tr2_num, K=4, nperms = 5)
+set.seed(123); kperm_4 = KMeansSparseCluster.permute(df_tr_num, K=4, nperms = 5)
 
 # Cluster
-set.seed(123); rskm = RSKC(d = df_tr2_num, ncl = 3, alpha = 0.1, L1 = kperm$bestw)
-set.seed(123); rskm_4 = RSKC(d = df_tr2_num, ncl = 4, alpha = 0.1, L1 = kperm$bestw)
+set.seed(123); rskm_4 = RSKC(d = df_tr_num, ncl = 4, alpha = 0.1, L1 = kperm_4$bestw)
 
 # Visualization of Clusters
-fviz_cluster(list(data = df_tr2_num, cluster = rskm$labels),
+fviz_cluster(list(data = df_tr_num, cluster = rskm_4$labels),
              stand = FALSE, geom = "point",frame.type = "norm")
 
-fviz_cluster(list(data = df_tr2_num, cluster = rskm_4$labels),
+fviz_cluster(list(data = tsne_2D_tr, cluster = rskm_4$labels),
              stand = FALSE, geom = "point",frame.type = "norm")
 
 
 # Important Variables for Clustering
-cluster_vars = data.frame('Variables' = unlist(attributes(rskm$weights)),'Weights' = rskm$weights) %>% 
+cluster_vars = data.frame('Variables' = unlist(attributes(rskm_4$weights)),'Weights' = rskm_4$weights) %>% 
               arrange(desc(Weights)) %>% filter(Weights > 0.01)
 
-# transactions
-cl_interprete = df_tr2 %>% dplyr::select(as.character(cluster_vars$Variables))
-cl_interprete_all = df_tr2
-cl_interprete_all$cluster = as.factor(rskm$labels)
-cl_interprete$cluster = as.factor(rskm$labels)
+# Interprete
+cl_interprete = df_tr %>% dplyr::select(as.character(cluster_vars$Variables))
+cl_interprete_all = df_tr
+cl_interprete_all$cluster = as.factor(rskm_4$labels)
+cl_interprete$cluster = as.factor(rskm_4$labels)
 cl_interprete = dplyr::select(cl_interprete, cluster, everything())
 
 profile = apply(cl_interprete[,-1], 2, function(x) tapply(x, cl_interprete$cluster, median_mode))
 
+table(rskm_4$labels)
 
+
+# Add cluster into df
+df_tr$labels = as.factor(rskm_4$labels)
+
+
+#### OUTLIER DETECTION ####
+df_tr_1 = df_tr %>% filter(labels == 1)
+df_tr_2 = df_tr %>% filter(labels == 2)
+df_tr_3 = df_tr %>% filter(labels == 3)
+df_tr_4 = df_tr %>% filter(labels == 4)
+
+isotree_1 = IsolationForest::IsolationTrees(x = df_tr_1 %>% dplyr::select(-labels))
+isotree_2 = IsolationForest::IsolationTrees(x = df_tr_2 %>% dplyr::select(-labels))
+isotree_3 = IsolationForest::IsolationTrees(x = df_tr_3 %>% dplyr::select(-labels))
+isotree_4 = IsolationForest::IsolationTrees(x = df_tr_4 %>% dplyr::select(-labels))
+
+df_tr_1$isof = IsolationForest::AnomalyScore(df_tr_1 %>% dplyr::select(-labels),isotree_1)[['outF']]
+df_tr_2$isof = IsolationForest::AnomalyScore(df_tr_2 %>% dplyr::select(-labels),isotree_2)[['outF']]
+df_tr_3$isof = IsolationForest::AnomalyScore(df_tr_3 %>% dplyr::select(-labels),isotree_3)[['outF']]
+df_tr_4$isof = IsolationForest::AnomalyScore(df_tr_4 %>% dplyr::select(-labels),isotree_4)[['outF']]
+
+df_tr2 = bind_rows(df_tr_1,df_tr_2,df_tr_3,df_tr_4)
+df_tr2$labels = NULL
 #### FEATURE SELECTION ####
 set.seed(123); bor = Boruta(DEFAULT_PROB~., data = df_tr2, doTrace = 2)
 plot(bor,cex.axis=.6, las=2, xlab="", main="Variable Importance")
 featlist = attStats(bor) %>% rownames_to_column(var = 'Features') %>% 
             dplyr::select(Features, medianImp) %>% mutate(rank = rank(-medianImp)) %>% arrange(rank)
 
-df_tr2_bor = df_tr2 %>% dplyr::select(DEFAULT_PROB, featlist$Features[c(1:10)])
+df_tr_bor = df_tr2 %>% dplyr::select(DEFAULT_PROB, featlist$Features[c(1:10)])
+
+
+vif(df_tr_bor)
+
+df_tr$isof
+
 
 
 #### MODEL BUILDING ####
 train_control = trainControl(method="cv",number=10,savePredictions=TRUE)
 
-train(DEFAULT_PROB ~ ., data = df_tr2, method = "glm", family="binomial",
-      trControl=train_control,metric='RMSE')
+lm = train(DEFAULT_PROB ~ ., data = df_tr_bor, method = "lm", trControl=train_control,metric='RMSE')
 
-glm(DEFAULT_PROB ~ VOLATILITY_180D, data = df_tr2_bor, family = binomial(link="logit"))
-                                                                                                             
-glm(DEFAULT_PROB ~ VOLATILITY_180D, data = df_tr2_bor, family = binomial(link="logit"))
-
-set.seed(123); rf = train(DEFAULT_PROB ~ ., data = df_tr2_bor, method='ranger',
+set.seed(123); rf = train(DEFAULT_PROB ~ ., data = df_tr_bor, method='ranger',
                           trControl=train_control, tuneGrid = expand.grid(mtry=c(2:5),
                           min.node.size = 5, splitrule = 'variance'), metric = 'RMSE')
 
-glm(DEFAULT_PROB ~ credit$VOLATILITY_180D., data=credit_smaller_non_na, na.action = na.omit)
-summary(glm_fit)
+glm_fit = glm(DEFAULT_PROB ~ ., data = df_tr_bor, family =  binomial(link = "logit"))
+predict(glm_fit)
 
+
+df_tr_bor$DEFAULT_PROB = (df_tr_bor$DEFAULT_PROB)/100
+
+fit = betareg(DEFAULT_PROB ~ .,data = df_tr_bor)
+
+
+
+
+summary(df_tr_bor$DEFAULT_PROB)
+
+
+ggplot()
+
+summary(glm_fit)
+logit(1.152)
+
+#### OUTLIER DETECTION ####
+IsolationForest::IsolationTrees()
+IsolationForest::AnomalyScore()
 
