@@ -6,7 +6,7 @@ library("quantmod")
 library("reshape2") 
 library(tidyr)
 library(DMwR)
-
+library(feather)
 
 credit <- read_excel("./Credit/Credit_DataSet.xlsx", sheet=2,
                      col_types=c("skip", "text", "text",
@@ -130,16 +130,18 @@ fxMerged[,22:30] = fxMerged[,22:30] * fxMerged$conversionFactor
 #fxMerged[,33:41] = fxMerged[,22:30] * fxMerged$conversionFactor
 
 #Reshape as the original 
-fxMerged<-fxMerged[,c(2,3,4,1,5:30)]
+credit<-fxMerged[,c(2,3,4,1,5:30)]
 
-credit<-fxMerged
+#Delete unreasonable observations
+credit[3932,]$EMPL_GROWTH<-NA
 
 ###################################################################################################
 #make a ndarry for python
 #####################################################################################################
 
 #colMeans(is.na(credit))
-write_feather(as.data.frame(credit), './df.feather')
+MyData <- read.csv(file="./EM_data.csv", header=TRUE, sep=",")
+write_feather(as.data.frame(MyData), './EMfeather')
 
 ###################################################################################################
 ##### EXPORT FOR NN AND EM
