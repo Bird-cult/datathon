@@ -1,7 +1,6 @@
 This is the code of our team for the first KU Leuven Datathon, where we were the 3rd best Master's team.
 
-Our approach was mainly to model the default probability of companies.
-
+Our approach was mainly to directly model the default probability of companies.
 
 # Jointly predicting probability of default and finding missing values:
   We do not use the categorical country columns that do not seem needed given the continuous ones.
